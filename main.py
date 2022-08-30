@@ -1,10 +1,26 @@
 import re
 import sys
 import time
+import json
 import requests
 import traceback
 from datetime import datetime
 # from rtx_helper import RTXHelper
+
+
+def pushplus(msg: str, pushplus_token):
+    if pushplus_token == "":
+        return
+    pushplus_url = 'http://www.pushplus.plus/send'
+    data = {
+        'token': pushplus_token,
+        'title': msg,
+        'content': msg,
+        'template': 'json'
+    }
+    body = json.dumps(data).encode(encoding='utf-8')
+    headers = {'Content-Type': 'application/json'}
+    requests.post(pushplus_url, data=body, headers=headers)
 
 
 def yqtb(username, password, name, params):
@@ -29,9 +45,9 @@ def yqtb(username, password, name, params):
     login_data['execution'] = execution
     response = session.post(login_url, data=login_data, headers=header)
     if "欢迎使用" in response.text:
-        print(name + "login successfully")
+        print(f"{name} login successfully")
     else:
-        print(name + "login unsuccessfully")
+        print(f"{name} login unsuccessfully")
         exit(1)
     res = ""
     for i in range(3):
@@ -40,7 +56,7 @@ def yqtb(username, password, name, params):
             response = session.get("https://yqtb.nwpu.edu.cn/wx/ry/jrsb.jsp")
             pattern = r"url:'ry_util\.jsp\?sign=(.*).*'"
             res = re.findall(pattern, response.text)
-    print('res:' + str(res))
+    # print('res:' + str(res))
     if len(res) == 0:
         print("error in script, please contact to the author")
         exit(1)
@@ -53,9 +69,9 @@ def yqtb(username, password, name, params):
     html = session.post(post_url, data=params, headers=header)
     result = '{"state":"1"}' in html.text
     if result:
-        print(name + "疫情填报成功\n")
+        print(f"{name} 疫情填报成功")
     else:
-        print(name + "疫情填报失败\n")
+        print(f"{name} 疫情填报失败!!")
 
 
 def get_now():
@@ -64,35 +80,24 @@ def get_now():
 
 def tianbao(list, params):
     print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + "疫情填报脚本开始运行")
-    x = 0
-    msg = ''
-    for i in list:
-        try:
-            type = ''
-            params_u = params.copy()
-            type = i[3]
-            # 设置0为在学校，1为在家
-            if type == '1':
-                params_u['szcsbm'] = i[4]
-                params_u['szcsmc'] = i[5]
-            params_u['userLoginId'] = i[0]
-            params_u['userName'] = i[2]
-            yqtb(i[0], i[1], i[2], params_u)
-            msg = msg + f'\n{i[2]}疫情填报成功'
-        except:
-            x = x + 1
-            # tianbao(list, params)
-            print(f'{get_now()}\n {i[2]}疫情填报出现异常，详情：\n {traceback.format_exc()}')
-            # RTXHelper.send_rtx_with_raw_data_all(f'{get_now()}\n {i[2]}疫情填报出现异常，详情：\n {traceback.format_exc()}')
-            # print(traceback.format_exc())
-    if x == 0:
-        # RTXHelper.send_rtx_with_raw_data(f'{get_now()}{msg}')
-        print("疫情填报脚本运行成功\n")
-    else:
-        print('疫情填报脚本出现异常,具体查看log\n')
+    try:
+        params_u = params.copy()
+        type = list[3]
+        # 设置0为在学校，1为在家
+        if type == '1':
+            params_u['szcsbm'] = list[4]
+            params_u['szcsmc'] = list[5]
+        params_u['userLoginId'] = list[0]
+        params_u['userName'] = list[2]
+        yqtb(list[0], list[1], list[2], params_u)
+        print(f'{list[2]} 疫情填报成功')
+        pushplus(f'{list[2]} 疫情填报成功', list[6])
+    except:
+        print(f'{get_now()}\n {list[2]}疫情填报出现异常，详情：\n {traceback.format_exc()}')
+        pushplus("疫情填报失败！！！查看log", list[6])
 
 
-class params:
+class Params:
     params_school = {
         # 是否核酸检测
         "hsjc": "1",
@@ -153,24 +158,16 @@ class params:
     }
 
 
-class lists:
-    yxk_list = [
-        # 第三个参数0就是在学校，其他就是自定义
-        # ['学号', '密码', '姓名', '0', 'szcsbm', 'xx省xx市xxx'],
-        ['2022202661', 'npu991226YAn.', '严笑凯', '1', '330682', '浙江省绍兴市上虞市']
-    ]
-    wj_list = [
-        # 第三个参数0就是在学校，其他就是自定义
-        # ['学号', '密码', '姓名', '0', 'szcsbm', 'xx省xx市xxx'],
-        ['2019302961', '555793lfw@', '王珏', '1', '330682', '浙江省绍兴市上虞市']
-    ]
-
-
 if __name__ == '__main__':
-    '''
-    https://gitee.com/ju-xiang/nwpuyqtb
-    前一个参数为列表，参考上面的list示例
-    后一个参数为想填报的信息，在学校选择params_school，在家选择prams_home，具体参数参见注释，不定期更新
-    '''
-    tianbao(lists.yxk_list, params.params_home)
-    tianbao(lists.wj_list, params.params_home)
+    with open("config.json", 'r', encoding='utf-8') as f:
+        users = json.load(f)
+    for user in users:
+        info_list = list(user.values())
+        params_type = Params.params_home if user["is_home"] == "1" else Params.params_school
+
+        '''
+        https://gitee.com/ju-xiang/nwpuyqtb
+        前一个参数为列表，参考上面的list示例
+        后一个参数为想填报的信息，在学校选择params_school，在家选择prams_home，具体参数参见注释，不定期更新
+        '''
+        tianbao(info_list, params_type)
