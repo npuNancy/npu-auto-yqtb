@@ -15,12 +15,13 @@ def pushplus(msg: str, pushplus_token):
     data = {
         'token': pushplus_token,
         'title': msg,
-        'content': msg,
+        'content': f"{get_now()} {msg}",
         'template': 'json'
     }
     body = json.dumps(data).encode(encoding='utf-8')
     headers = {'Content-Type': 'application/json'}
     requests.post(pushplus_url, data=body, headers=headers)
+    print("消息发送成功")
 
 
 def yqtb(username, password, name, params):
@@ -38,7 +39,9 @@ def yqtb(username, password, name, params):
         "_eventId": "submit"
     }
     header = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.108 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.108 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': 'https://yqtb.nwpu.edu.cn/wx/ry/jrsb_xs.jsp',
     }
     response = session.get(login_url, headers=header)
     execution = re.findall(r'name="execution" value="(.*?)"', response.text)[0]
@@ -68,10 +71,9 @@ def yqtb(username, password, name, params):
     time.sleep(1)
     html = session.post(post_url, data=params, headers=header)
     result = '{"state":"1"}' in html.text
-    if result:
-        print(f"{name} 疫情填报成功")
-    else:
-        print(f"{name} 疫情填报失败!!")
+
+    print(html.text.strip())
+    return result
 
 
 def get_now():
@@ -89,9 +91,13 @@ def tianbao(list, params):
             params_u['szcsmc'] = list[5]
         params_u['userLoginId'] = list[0]
         params_u['userName'] = list[2]
-        yqtb(list[0], list[1], list[2], params_u)
-        print(f'{list[2]} 疫情填报成功')
-        pushplus(f'{list[2]} 疫情填报成功', list[6])
+        result = yqtb(list[0], list[1], list[2], params_u)
+        if result:
+            print(f'{list[2]} 疫情填报成功')
+            pushplus(f'{list[2]} 疫情填报成功', list[6])
+        else:
+            print(f'{list[2]} 疫情填报失败了！！')
+            pushplus(f'{list[2]} 疫情填报失败了！！', list[6])
     except:
         print(f'{get_now()}\n {list[2]}疫情填报出现异常，详情：\n {traceback.format_exc()}')
         pushplus("疫情填报失败！！！查看log", list[6])
